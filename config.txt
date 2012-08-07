@@ -1,0 +1,9 @@
+[Basic]
+PromotionBranch = R2
+MinAging = 180
+MinItemPerBranch = 2
+
+[Branches]
+A = CL,ZW,LP
+B = BN,PK,PY,PT,R2,CT,SC
+C = RI,RS,KS,HY,RH
