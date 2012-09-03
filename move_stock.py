@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 # encoding: utf-8
+# @NuttyKnot with ♥
+# 20120903
  
 import xlrd, sys, ConfigParser
 from operator import itemgetter, attrgetter
@@ -13,29 +15,31 @@ if len(sys.argv) < 2:
 config = ConfigParser.SafeConfigParser()
 config.read('config.txt')
 
+all_branch = set()
+class_list = {}
+class_set = {}
+class_name = ['A', 'B', 'C']
+
 # branch classes
-class_a_list = config.get('Branches', 'A').split(',')
-class_a = set(class_a_list)
-class_b_list = config.get('Branches', 'B').split(',')
-class_b = set(class_b_list)
-class_c_list = config.get('Branches', 'C').split(',')
-class_c = set(class_c_list)
+for class_desc in class_name:
+	class_list[class_desc] = config.get('Branches', class_desc).split(',')
+	class_set[class_desc] = set(class_list[class_desc])
+	all_branch = all_branch | class_set[class_desc]
 
-all_branch = class_a | class_b | class_c
-
-if len(all_branch) != len(class_a) + len(class_b) + len(class_c):
+if len(all_branch) != reduce(lambda x,y: x+len(y), class_list.itervalues(), 0):
 	print "duplicated branch in class!"
 	exit(1)
 
 non_c_branch_list = []
-non_c_branch_list.extend(class_a_list)
-non_c_branch_list.extend(class_b_list)
+for class_desc in ['A', 'B']:
+	non_c_branch_list.extend(class_list[class_desc])
 
-promotion_list = config.get('Basic', 'PromotionBranch').split(',')
-promotion = set(promotion_list)
-number_of_promotion_branch = len(promotion)
+promotion_config = config.get('Basic', 'PromotionBranch')
+promotion_list = promotion_config.split(',')
+number_of_promotion_branch = 0 if len(promotion_config) == 0 else len(promotion_list)
 
-min_aging = config.get('Basic', 'MinAging')
+min_ageing = config.get('Basic', 'MinAgeing')
+# min promotional item per branch
 min_item_per_branch = config.get('Basic', 'MinItemPerBranch')
 
 # open excel
@@ -57,20 +61,21 @@ for i in xrange(25,worksheet.ncols,2):
 	branch_map[cell_value] = i
 	reverse_branch_map[i] = cell_value
 
+def colToBranchClass(col):
+	branch = reverse_branch_map[col]
+	for class_desc in class_name:
+		if branch in class_set[class_desc]:
+			return class_desc
+	print "branch is not in any class!"
+	assert false # branch is not in any class
+
 # find col# of each branch order by branch class
 def branchDescToCode(branch_list):
-	branch_code_list = []
-	for code in branch_list:
-		try:
-			branch_code_list.append(branch_map['%sCT' % code])
-		except KeyError:
-			pass
-	return branch_code_list
-
+	return filter(None, map(lambda x: branch_map['%sCT' % x] if '%sCT' % x in branch_map else None, branch_list))
 non_c_branch_col_list = branchDescToCode(non_c_branch_list)
-class_c_col_list = branchDescToCode(class_c_list)
-class_b_col_list = branchDescToCode(class_b_list)
-class_a_col_list = branchDescToCode(class_a_list)
+class_col_list = {}
+for class_desc in class_name:
+	class_col_list[class_desc] = branchDescToCode(class_list[class_desc])
 
 def sortBranch(row):
 	i = row
@@ -95,13 +100,12 @@ def sortBranch(row):
 		# return list of branch that has this item
 		# sort by
 		# 1. branch that has more than one item
-		# 2. branch that has oldest aging
+		# 2. branch that has oldest ageing
 		more_than_one.extend(temp)
 		return more_than_one
 	sorted_branch = []
-	sorted_branch.extend(loopInClass(class_c_col_list))
-	sorted_branch.extend(loopInClass(class_b_col_list))
-	sorted_branch.extend(loopInClass(class_a_col_list))
+	for class_desc in reversed(class_name):
+		sorted_branch.extend(loopInClass(class_col_list[class_desc]))
 	return deque(sorted_branch)
 
 # loop through each SKU
@@ -109,13 +113,13 @@ def sortBranch(row):
 for i in xrange(3,worksheet.nrows):
 	percent_marked_down = worksheet.cell_value(i, 21) # get %Mark down
 	sku = worksheet.cell_value(i, 5)
-	if percent_marked_down != "0.00%":
+	# skip no mark-down or no promotional branch
+	if percent_marked_down != "0.00%" and number_of_promotion_branch != 0:
 		pocket = set()
 		optional_pocket = set()
 		pocketed_item_count = 0
 		# loop through branches
-		# pick all "old" item
-		# while store "non-old" item in seperated list
+		# divide item into old and non-old
 		for j in xrange(25,worksheet.ncols,2):
 			cell_type = worksheet.cell_type(i, j)
 			# filter blank branch
@@ -124,27 +128,42 @@ for i in xrange(3,worksheet.nrows):
 			item_count = int(worksheet.cell_value(i, j))
 			if item_count == 0:
 				continue
-			item = (reverse_branch_map[j], item_count)
-			if(int(worksheet.cell_value(i, j+1)) >= min_aging):
+			item = (reverse_branch_map[j], item_count, )
+
+			optional_pocket.add(item) # add to pocket
+
+			"""
+			if(int(worksheet.cell_value(i, j+1)) >= min_ageing):
 				pocket.add(item) # add to pocket
 				pocketed_item_count = pocketed_item_count + item_count
 			else:
 				optional_pocket.add(item) # add to pocket
-		min_pocketed_item =  number_of_promotion_branch * min_item_per_branch
+			"""
 
+		min_pocketed_item = number_of_promotion_branch * min_item_per_branch
+
+		# sort old item
+		sorted_optional_pocket = sorted(optional_pocket, key=itemgetter(1), reverse=True)
+		while int(pocketed_item_count) < int(min_pocketed_item) and len(sorted_optional_pocket) > 0:
+			item = sorted_optional_pocket.pop()
+			pocket.add(item)
+			pocketed_item_count = pocketed_item_count + item[1]
+
+		"""
 		# if picked item is not enough,
-		# sort by aging desc and pick item
+		# sort by ageing desc and pick item
 		if len(optional_pocket) > 0 and pocketed_item_count < min_pocketed_item:
 			sorted_optional_pocket = sorted(optional_pocket, key=itemgetter(1), reverse=True)
 			while pocketed_item_count < min_pocketed_item and len(sorted_optional_pocket) > 0:
 				item = sorted_optional_pocket.pop()
 				pocket.add(item)
 				pocketed_item_count = pocketed_item_count + item[1]
-		#print pocket
+		"""
 
+		#print pocket
 		# optional
 		#pocket = sorted(pocket, key=itemgetter(1), reverse=True)
-		#print pocket
+		#print sorted_optional_pocket
 
 		# distribute
 		avg_item_per_branch = int(pocketed_item_count / number_of_promotion_branch)
@@ -158,21 +177,28 @@ for i in xrange(3,worksheet.nrows):
 				pocket.add((item[0], item[1] - avg_item_per_branch))
 				item[1] = avg_item_per_branch
 			output.write('%s,%s,%s,%s\n' % (sku, item[0], current_promotion_branch,item[1]))
-			#print '%s: %s,%s,%s,%s # promotional move' % (i, sku, item[0], current_promotion_branch,item[1])
+			print '%s: %s,%s,%s,%s # promotional move' % (i, sku, item[0], current_promotion_branch,item[1])
 			current_promotion_branch_count = current_promotion_branch_count + item[1]
 			if current_promotion_branch_count > avg_item_per_branch:
 				current_promotion_branch_index = current_promotion_branch_index + 1
 				current_promotion_branch = promotion_list[current_promotion_branch_index]
 	else:
 		# loop through branches 
+		sorted_branch = []
+		has_calc_sorted_branch = False
 		for j in non_c_branch_col_list:
-			# filter blank branch
-			sorted_branch = []
+			# filter blank branch			
 			cell_type = worksheet.cell_type(i, j)			
 			if cell_type == 0 or cell_type == 6 or (cell_type == 2 and int(worksheet.cell_value(i, j)) == 0):
-				if len(sorted_branch) == 0:
+				if not has_calc_sorted_branch:
 					sorted_branch = sortBranch(i)					
-				left = sorted_branch[0]
+					has_calc_sorted_branch = True
+				if len(sorted_branch) > 0:
+					left = sorted_branch[0]
+				else:
+					# out-of-stock
+					print '%s: # %s out-of-stock at %s' % (i, sku, reverse_branch_map[j])
+					continue					
 				if left[1] > 1:
 					sorted_branch[0] = left[0], left[1] - 1
 				else:
@@ -184,6 +210,7 @@ output.close()
 
 exit()
 
+# debuging tool
 num_rows = worksheet.nrows - 1
 num_cells = worksheet.ncols - 1
 

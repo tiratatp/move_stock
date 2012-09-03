@@ -1,9 +1,15 @@
 [Basic]
+# put blank if there is no branch in promotion
 PromotionBranch = R2
-MinAging = 180
+# minimum ageing to consider moving; currently not using this value
+MinAgeing = 180
+# minimum number of item per promotional branch per sku
 MinItemPerBranch = 2
 
 [Branches]
+# ensure there is no space between branch and comma
 A = CL,ZW,LP
 B = BN,PK,PY,PT,R2,CT,SC
 C = RI,RS,KS,HY,RH
+
+# @NuttyKnot with ♥
