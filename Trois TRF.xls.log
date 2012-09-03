@@ -1,0 +1,30 @@
+"CCCT" <=> column#: 25
+"PYCT" <=> column#: 27
+"BCCT" <=> column#: 29
+"LPCT" <=> column#: 31
+"RICT" <=> column#: 33
+"RSCT" <=> column#: 35
+"PKCT" <=> column#: 37
+"KSCT" <=> column#: 39
+"HYCT" <=> column#: 41
+"ZWCT" <=> column#: 43
+"BNCT" <=> column#: 45
+"RHCT" <=> column#: 47
+"PTCT" <=> column#: 49
+"CTCT" <=> column#: 51
+"WHCT" <=> column#: 53
+"CLCT" <=> column#: 55
+"R2CT" <=> column#: 57
+"HOCT" <=> column#: 59
+"ZDCT" <=> column#: 61
+Sorted: deque([(u'KSCT', 1, 300, 'C'), (u'BNCT', 1, 300, 'B'), (u'PYCT', 1, 300, 'B'), (u'PTCT', 1, 300, 'B'), (u'LPCT', 2, 300, 'A'), (u'PKCT', 1, 270, 'B'), (u'HYCT', 1, 150, 'C'), (u'ZWCT', 1, 90, 'A')])
+3: 3436975,KSCT,R2,1 # promotional move
+3: 3436975,BNCT,R2,1 # promotional move
+3: 3436975,PYCT,RI,1 # promotional move
+3: 3436975,PTCT,RI,1 # promotional move
+Sorted: deque([(u'BNCT', 1, 90), (u'CLCT', 1, 90), (u'ZWCT', 1, 90), (u'LPCT', 1, 90)])
+4: 3556691,BNCT,PKCT,1 # out-of-stock move
+4: 3556691,CLCT,PYCT,1 # out-of-stock move
+4: 3556691,ZWCT,PTCT,1 # out-of-stock move
+4: 3556691,LPCT,R2CT,1 # out-of-stock move
+4: # 3556691 out-of-stock at CTCT

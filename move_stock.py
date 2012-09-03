@@ -3,13 +3,35 @@
 # @NuttyKnot with ♥
 # 20120903
  
-import xlrd, sys, ConfigParser
+import xlrd, sys, ConfigParser, math
 from operator import itemgetter, attrgetter
 from collections import deque
 
 if len(sys.argv) < 2:
 	print "usage: %s <SOH excel filename>" % sys.argv[0]
 	exit(1)
+
+# check if config.txt exist, if not create
+try:
+	with open('config.txt') as f: pass
+except IOError as e:
+	print "cannot find config.txt, creating default config.txt!"
+	with open('config.txt', 'w') as f:
+		f.write("""[Basic]
+# put blank if there is no branch in promotion
+PromotionBranch = R2
+# minimum ageing to consider moving; currently not using this value
+MinAgeing = 180
+# number of item per promotional branch per sku
+PromotionalItemPerBranch = 2
+
+[Branches]
+# ensure there is no space between branch and comma
+A = CL,ZW,LP
+B = BN,PK,PY,PT,R2,CT,SC
+C = RI,RS,KS,HY,RH
+
+# @NuttyKnot with ♥""")
 
 # read and parse config
 config = ConfigParser.SafeConfigParser()
@@ -38,9 +60,9 @@ promotion_config = config.get('Basic', 'PromotionBranch')
 promotion_list = promotion_config.split(',')
 number_of_promotion_branch = 0 if len(promotion_config) == 0 else len(promotion_list)
 
-min_ageing = config.get('Basic', 'MinAgeing')
+min_ageing = config.getint('Basic', 'MinAgeing')
 # min promotional item per branch
-min_item_per_branch = config.get('Basic', 'MinItemPerBranch')
+promotional_item_per_branch = config.getint('Basic', 'PromotionalItemPerBranch')
 
 # open excel
 filename = sys.argv[1]
@@ -48,7 +70,12 @@ workbook = xlrd.open_workbook(filename, on_demand=True)
 worksheet = workbook.sheet_by_index(1)
 
 # open output file
-output = open('%s.txt' % filename, 'w')
+output = open('%s.csv' % filename, 'w')
+log = open('%s.log' % filename, 'w')
+
+def printlog(str):
+	print str
+	log.write("%s\n" % str)
 
 branch_map = {}
 reverse_branch_map = {}
@@ -57,21 +84,23 @@ reverse_branch_map = {}
 for i in xrange(25,worksheet.ncols,2):
 	cell_type = worksheet.cell_type(1, i)
 	cell_value = worksheet.cell_value(1, i).strip()
-	print '"%s" <=> column#: %s' % (cell_value, i)
+	printlog('"%s" <=> column#: %s' % (cell_value, i))
 	branch_map[cell_value] = i
 	reverse_branch_map[i] = cell_value
 
+# convert column to class
 def colToBranchClass(col):
-	branch = reverse_branch_map[col]
+	branch = reverse_branch_map[col][:2]
 	for class_desc in class_name:
 		if branch in class_set[class_desc]:
 			return class_desc
-	print "branch is not in any class!"
-	assert false # branch is not in any class
+	printlog("branch is not in any class!")
+	assert False # branch is not in any class
 
 # find col# of each branch order by branch class
 def branchDescToCode(branch_list):
 	return filter(None, map(lambda x: branch_map['%sCT' % x] if '%sCT' % x in branch_map else None, branch_list))
+
 non_c_branch_col_list = branchDescToCode(non_c_branch_list)
 class_col_list = {}
 for class_desc in class_name:
@@ -91,12 +120,13 @@ def sortBranch(row):
 			item_count = int(worksheet.cell_value(i, j))
 			if item_count == 0:
 				continue
-			item = (reverse_branch_map[j], item_count)
+			item = (reverse_branch_map[j], item_count, int(worksheet.cell_value(i, j+1)))
 			if item_count > 1:
 				more_than_one.append(item)
 			else:
-				temp.append((reverse_branch_map[j], item_count))
-		temp = sorted(temp, key=itemgetter(1), reverse=True)
+				temp.append(item)
+		more_than_one = sorted(more_than_one, key=itemgetter(2), reverse=True)		
+		temp = sorted(temp, key=itemgetter(2), reverse=True)
 		# return list of branch that has this item
 		# sort by
 		# 1. branch that has more than one item
@@ -106,6 +136,7 @@ def sortBranch(row):
 	sorted_branch = []
 	for class_desc in reversed(class_name):
 		sorted_branch.extend(loopInClass(class_col_list[class_desc]))
+	printlog("Sorted: %s" % deque(sorted_branch))
 	return deque(sorted_branch)
 
 # loop through each SKU
@@ -116,10 +147,8 @@ for i in xrange(3,worksheet.nrows):
 	# skip no mark-down or no promotional branch
 	if percent_marked_down != "0.00%" and number_of_promotion_branch != 0:
 		pocket = set()
-		optional_pocket = set()
 		pocketed_item_count = 0
 		# loop through branches
-		# divide item into old and non-old
 		for j in xrange(25,worksheet.ncols,2):
 			cell_type = worksheet.cell_type(i, j)
 			# filter blank branch
@@ -128,60 +157,50 @@ for i in xrange(3,worksheet.nrows):
 			item_count = int(worksheet.cell_value(i, j))
 			if item_count == 0:
 				continue
-			item = (reverse_branch_map[j], item_count, )
 
-			optional_pocket.add(item) # add to pocket
+			pocket.add((reverse_branch_map[j], item_count, int(worksheet.cell_value(i, j+1)), colToBranchClass(j))) # add to pocket
 
-			"""
-			if(int(worksheet.cell_value(i, j+1)) >= min_ageing):
-				pocket.add(item) # add to pocket
-				pocketed_item_count = pocketed_item_count + item_count
-			else:
-				optional_pocket.add(item) # add to pocket
-			"""
+		if len(pocket) == 0:
+			continue
 
-		min_pocketed_item = number_of_promotion_branch * min_item_per_branch
+		# sort items
+		# order by ageing then by class
+		pocket = sorted(pocket, key=itemgetter(2, 3), reverse=True)
+		# convert to deque
+		pocket = deque(pocket)
 
-		# sort old item
-		sorted_optional_pocket = sorted(optional_pocket, key=itemgetter(1), reverse=True)
-		while int(pocketed_item_count) < int(min_pocketed_item) and len(sorted_optional_pocket) > 0:
-			item = sorted_optional_pocket.pop()
-			pocket.add(item)
-			pocketed_item_count = pocketed_item_count + item[1]
+		printlog("Sorted: %s" % pocket)
 
-		"""
-		# if picked item is not enough,
-		# sort by ageing desc and pick item
-		if len(optional_pocket) > 0 and pocketed_item_count < min_pocketed_item:
-			sorted_optional_pocket = sorted(optional_pocket, key=itemgetter(1), reverse=True)
-			while pocketed_item_count < min_pocketed_item and len(sorted_optional_pocket) > 0:
-				item = sorted_optional_pocket.pop()
-				pocket.add(item)
-				pocketed_item_count = pocketed_item_count + item[1]
-		"""
+		# count sum of item in pocket
+		count_pocket = reduce(lambda x,y:x+int(y[1]), pocket , 0)
+		min_pocketed_item = number_of_promotion_branch * promotional_item_per_branch
+		pocketed_item_count = count_pocket if count_pocket < min_pocketed_item else min_pocketed_item
 
-		#print pocket
-		# optional
-		#pocket = sorted(pocket, key=itemgetter(1), reverse=True)
-		#print sorted_optional_pocket
+		# avg_item_per_branch = promotional_item_per_branch if there is abundant of that sku
+		# else
+		# avg_item_per_branch = pocketed_item_count/number_of_promotion_branch
 
 		# distribute
-		avg_item_per_branch = int(pocketed_item_count / number_of_promotion_branch)
+		avg_item_per_branch = math.ceil(float(pocketed_item_count) / number_of_promotion_branch)
 		current_promotion_branch_index = 0
 		current_promotion_branch = promotion_list[current_promotion_branch_index]
 		current_promotion_branch_count = 0
 		while len(pocket) > 0:			
-			item = pocket.pop()
+			item = pocket.popleft()
 			# if item in this branch has more than avg, split
-			if item[1] > avg_item_per_branch + 1:
-				pocket.add((item[0], item[1] - avg_item_per_branch))
-				item[1] = avg_item_per_branch
+			if item[1] > avg_item_per_branch:
+				pocket.appendleft((item[0], item[1] - avg_item_per_branch))
+				item = (item[0], avg_item_per_branch)
 			output.write('%s,%s,%s,%s\n' % (sku, item[0], current_promotion_branch,item[1]))
-			print '%s: %s,%s,%s,%s # promotional move' % (i, sku, item[0], current_promotion_branch,item[1])
+			printlog('%s: %s,%s,%s,%s # promotional move' % (i, sku, item[0], current_promotion_branch,item[1]))
 			current_promotion_branch_count = current_promotion_branch_count + item[1]
-			if current_promotion_branch_count > avg_item_per_branch:
+			if current_promotion_branch_count >= avg_item_per_branch:
 				current_promotion_branch_index = current_promotion_branch_index + 1
-				current_promotion_branch = promotion_list[current_promotion_branch_index]
+				try:
+					current_promotion_branch = promotion_list[current_promotion_branch_index]
+				except IndexError:
+					break
+				current_promotion_branch_count = 0
 	else:
 		# loop through branches 
 		sorted_branch = []
@@ -197,14 +216,14 @@ for i in xrange(3,worksheet.nrows):
 					left = sorted_branch[0]
 				else:
 					# out-of-stock
-					print '%s: # %s out-of-stock at %s' % (i, sku, reverse_branch_map[j])
+					printlog('%s: # %s out-of-stock at %s' % (i, sku, reverse_branch_map[j]))
 					continue					
 				if left[1] > 1:
 					sorted_branch[0] = left[0], left[1] - 1
 				else:
 					sorted_branch.popleft()
 				output.write('%s,%s,%s,%s\n' % (sku, left[0], reverse_branch_map[j], 1))
-				print '%s: %s,%s,%s,%s # out-of-stock move' % (i, sku, left[0], reverse_branch_map[j], 1)
+				printlog('%s: %s,%s,%s,%s # out-of-stock move' % (i, sku, left[0], reverse_branch_map[j], 1))
 
 output.close()				
 
