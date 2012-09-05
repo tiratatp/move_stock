@@ -1,10 +1,8 @@
 [Basic]
 # put blank if there is no branch in promotion
-PromotionBranch = R2,RI
-# minimum ageing to consider moving; currently not using this value
-MinAgeing = 180
+PromotionBranch = R2
 # number of item per promotional branch per sku
-PromotionalItemPerBranch = 2
+PromotionalItemPerBranch = 1
 
 [Branches]
 # ensure there is no space between branch and comma
@@ -12,4 +10,4 @@ A = CL,ZW,LP
 B = BN,PK,PY,PT,R2,CT,SC
 C = RI,RS,KS,HY,RH
 
-# @NuttyKnot with ♥
+# For move_stock, Tiratat Patana-anake

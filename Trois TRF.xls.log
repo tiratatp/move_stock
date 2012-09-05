@@ -19,9 +19,6 @@
 "ZDCT" <=> column#: 61
 Sorted: deque([(u'KSCT', 1, 300, 'C'), (u'BNCT', 1, 300, 'B'), (u'PYCT', 1, 300, 'B'), (u'PTCT', 1, 300, 'B'), (u'LPCT', 2, 300, 'A'), (u'PKCT', 1, 270, 'B'), (u'HYCT', 1, 150, 'C'), (u'ZWCT', 1, 90, 'A')])
 3: 3436975,KSCT,R2,1 # promotional move
-3: 3436975,BNCT,R2,1 # promotional move
-3: 3436975,PYCT,RI,1 # promotional move
-3: 3436975,PTCT,RI,1 # promotional move
 Sorted: deque([(u'BNCT', 1, 90), (u'CLCT', 1, 90), (u'ZWCT', 1, 90), (u'LPCT', 1, 90)])
 4: 3556691,BNCT,PKCT,1 # out-of-stock move
 4: 3556691,CLCT,PYCT,1 # out-of-stock move
